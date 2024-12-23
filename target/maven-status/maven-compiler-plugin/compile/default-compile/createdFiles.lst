@@ -1,0 +1,9 @@
+com\school\controller\StudentServlet.class
+com\school\controller\TeacherServlet.class
+com\school\dao\CourseDAO.class
+com\school\model\Course.class
+com\school\dao\StudentDAO.class
+com\school\dao\TeacherDAO.class
+com\school\model\Student.class
+com\school\model\Teacher.class
+com\school\controller\CourseServlet.class
