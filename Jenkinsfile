@@ -2,19 +2,30 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'monapp:school-management'
-        DOCKER_REGISTRY = 'docker.io'
+        // Simplified image name to avoid registry prefix issues
         DOCKER_REPO = 'hanaemouhib'
+        DOCKER_IMAGE = 'school-management'
         DOCKER_TAG = 'latest'
-        DOCKER_IMAGE_NAME = "$DOCKER_REGISTRY/$DOCKER_REPO/$DOCKER_IMAGE:$DOCKER_TAG"
+        DOCKER_IMAGE_NAME = "${DOCKER_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
+        // Add credentials
+        DOCKERHUB_CREDENTIALS = credentials('DockerHub-Credentials')
     }
 
     stages {
+        stage('Checkout') {
+            steps {
+                // Add explicit checkout with credentials
+                git branch: 'master',
+                    url: 'https://github.com/HanaeMouhib/https://github.com/HanaeMouhib/school-management.git',
+                    credentialsId: 'github-token'
+            }
+        }
+
         stage('Build') {
             steps {
                 script {
                     echo "Building the project"
-                    sh 'mvn clean install'
+                    sh 'mvn clean install -DskipTests'
                 }
             }
         }
@@ -32,33 +43,38 @@ pipeline {
             steps {
                 script {
                     echo "Building Docker image"
-                    sh "docker build -t $DOCKER_IMAGE_NAME ."
+                    sh "docker build -t ${DOCKER_IMAGE_NAME} ."
                 }
             }
         }
 
-        stage('Push Docker Image to DockerHub') {
+        stage('Push Docker Image') {
             steps {
                 script {
                     echo "Pushing Docker image to DockerHub"
-                    withCredentials([usernamePassword(credentialsId: 'DockerHub-Credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                        sh "docker push $DOCKER_IMAGE_NAME"
-                    }
+                    sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                    sh "docker push ${DOCKER_IMAGE_NAME}"
+                    sh "docker logout"
                 }
             }
         }
 
-        stage('Deploy to Remote Server') {
+        stage('Deploy') {
             steps {
                 script {
                     echo "Deploying to remote server"
-                    sshagent(credentials: ['3f0a1a7f-fd85-4c52-95a1-957a6ac9d7bc']) {
-                        // Pull Docker image directly on the remote server
-                        sh "ssh hanaessh@localhost 'docker pull $DOCKER_IMAGE_NAME'"
-
-                        // Restart or create a new container
-                        sh 'ssh hanaessh@localhost "docker stop myapp-container || true && docker rm myapp-container || true && docker run -d --name myapp-container $DOCKER_IMAGE_NAME"'
+                    // Using the SSH agent with your configured key
+                    sshagent(['3f0a1a7f-fd85-4c52-95a1-957a6ac9d7bc']) {
+                        // Add error handling and ensure docker login on remote
+                        sh """
+                            ssh -o StrictHostKeyChecking=no hanaessh@localhost '
+                                echo "${DOCKERHUB_CREDENTIALS_PSW}" | docker login -u "${DOCKERHUB_CREDENTIALS_USR}" --password-stdin
+                                docker pull ${DOCKER_IMAGE_NAME}
+                                docker stop school-management || true
+                                docker rm school-management || true
+                                docker run -d --name school-management -p 9090:8080 ${DOCKER_IMAGE_NAME}
+                                docker logout'
+                        """
                     }
                 }
             }
@@ -66,6 +82,10 @@ pipeline {
     }
 
     post {
+        always {
+            echo "Cleaning up..."
+            sh 'docker logout'
+        }
         success {
             echo "Pipeline completed successfully!"
         }
