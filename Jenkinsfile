@@ -2,22 +2,26 @@ pipeline {
     agent any
 
     environment {
-        // Simplified image name to avoid registry prefix issues
         DOCKER_REPO = 'hanaemouhib'
         DOCKER_IMAGE = 'school-management'
         DOCKER_TAG = 'latest'
         DOCKER_IMAGE_NAME = "${DOCKER_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-        // Add credentials
         DOCKERHUB_CREDENTIALS = credentials('DockerHub-Credentials')
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Add explicit checkout with credentials
-                git branch: 'master',
-                    url: 'https://github.com/HanaeMouhib/https://github.com/HanaeMouhib/school-management.git',
-                    credentialsId: 'github-token'
+                script {
+                    // Augmenter le buffer HTTP pour éviter des erreurs réseau
+                    sh 'git config --global http.postBuffer 524288000'
+
+                    // Cloner le dépôt avec URL corrigée
+                    git branch: 'master',
+                        url: 'https://github.com/HanaeMouhib/school-management.git',
+                        credentialsId: 'github-token',
+                        shallow: true // Réduire la profondeur du clone
+                }
             }
         }
 
@@ -63,9 +67,7 @@ pipeline {
             steps {
                 script {
                     echo "Deploying to remote server"
-                    // Using the SSH agent with your configured key
                     sshagent(['3f0a1a7f-fd85-4c52-95a1-957a6ac9d7bc']) {
-                        // Add error handling and ensure docker login on remote
                         sh """
                             ssh -o StrictHostKeyChecking=no hanaessh@localhost '
                                 echo "${DOCKERHUB_CREDENTIALS_PSW}" | docker login -u "${DOCKERHUB_CREDENTIALS_USR}" --password-stdin
