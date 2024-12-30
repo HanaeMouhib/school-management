@@ -66,7 +66,7 @@ pipeline {
                             docker pull ${DOCKER_IMAGE}:${DOCKER_TAG} &&
                             docker stop school-management || true &&
                             docker rm school-management || true &&
-                            docker run -d --name school-management -p 8080:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
+                            docker run -d --name school-management -p 9090:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
                         "
                         '''
                     }
