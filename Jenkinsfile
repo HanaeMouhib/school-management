@@ -2,52 +2,46 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_REPO = 'hanaemouhib'
-        DOCKER_IMAGE = 'school-management'
-        DOCKER_TAG = 'latest'
-        DOCKER_IMAGE_NAME = "${DOCKER_REPO}/${DOCKER_IMAGE}:${DOCKER_TAG}"
-        DOCKERHUB_CREDENTIALS = credentials('DockerHub-Credentials')
+        DOCKER_IMAGE = "hanaemouhib/school-management"
+        DOCKER_TAG = "latest"
+        DOCKER_CREDENTIALS_ID = "dockerhub-credentials"
+        GIT_CREDENTIALS_ID = "github-token"
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
-                script {
-                   
-                    sh 'git config --global http.postBuffer 524288000'
-
-                    
-                    git branch: 'master',
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/master']],
+                    userRemoteConfigs: [[
                         url: 'https://github.com/HanaeMouhib/school-management.git',
-                        credentialsId: 'github-token',
-                        shallow: true 
-                }
+                        credentialsId: "${GIT_CREDENTIALS_ID}"
+                    ]]
+                ])
             }
         }
 
         stage('Build') {
             steps {
                 script {
-                    echo "Building the project"
-                    sh 'mvn clean install -DskipTests'
+                    sh 'mvn clean package'
                 }
             }
         }
 
-        stage('Unit Tests') {
+        stage('Run Unit Tests') {
             steps {
                 script {
-                    echo "Running unit tests"
                     sh 'mvn test'
                 }
             }
         }
 
-        stage('Create Docker Image') {
+        stage('Build Docker Image') {
             steps {
                 script {
-                    echo "Building Docker image"
-                    sh "docker build -t ${DOCKER_IMAGE_NAME} ."
+                    sh "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
                 }
             }
         }
@@ -55,28 +49,26 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    echo "Pushing Docker image to DockerHub"
-                    sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
-                    sh "docker push ${DOCKER_IMAGE_NAME}"
-                    sh "docker logout"
+                    withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
+                        sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    }
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Remote Server') {
             steps {
                 script {
-                    echo "Deploying to remote server"
-                    sshagent(['3f0a1a7f-fd85-4c52-95a1-957a6ac9d7bc']) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no hanaessh@localhost '
-                                echo "${DOCKERHUB_CREDENTIALS_PSW}" | docker login -u "${DOCKERHUB_CREDENTIALS_USR}" --password-stdin
-                                docker pull ${DOCKER_IMAGE_NAME}
-                                docker stop school-management || true
-                                docker rm school-management || true
-                                docker run -d --name school-management -p 9090:8080 ${DOCKER_IMAGE_NAME}
-                                docker logout'
-                        """
+                    sshagent(['remote-server-credentials']) {
+                        sh '''
+                        ssh user@remote-server "
+                            docker pull ${DOCKER_IMAGE}:${DOCKER_TAG} &&
+                            docker stop school-management || true &&
+                            docker rm school-management || true &&
+                            docker run -d --name school-management -p 8080:8080 ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        "
+                        '''
                     }
                 }
             }
@@ -85,14 +77,13 @@ pipeline {
 
     post {
         always {
-            echo "Cleaning up..."
-            sh 'docker logout'
+            echo 'Pipeline finished.'
         }
         success {
-            echo "Pipeline completed successfully!"
+            echo 'Pipeline succeeded!'
         }
         failure {
-            echo "Pipeline failed. Check the logs!"
+            echo 'Pipeline failed.'
         }
     }
 }
