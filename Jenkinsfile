@@ -13,14 +13,14 @@ pipeline {
         stage('Checkout') {
             steps {
                 script {
-                    // Augmenter le buffer HTTP pour éviter des erreurs réseau
+                   
                     sh 'git config --global http.postBuffer 524288000'
 
-                    // Cloner le dépôt avec URL corrigée
+                    
                     git branch: 'master',
                         url: 'https://github.com/HanaeMouhib/school-management.git',
                         credentialsId: 'github-token',
-                        shallow: true // Réduire la profondeur du clone
+                        shallow: true 
                 }
             }
         }
