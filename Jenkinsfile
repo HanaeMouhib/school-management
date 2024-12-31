@@ -15,7 +15,7 @@ pipeline {
                     $class: 'GitSCM',
                     branches: [[name: '*/master']],
                     userRemoteConfigs: [[
-                        url: 'https://github.com/HanaeMouhib/school-management',
+                        url: 'https://github.com/HanaeMouhib/school-management.git',
                         credentialsId: "${GIT_CREDENTIALS_ID}"
                     ]]
                 ])
